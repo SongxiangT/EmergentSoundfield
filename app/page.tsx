@@ -260,6 +260,11 @@ export default function Home() {
 
   useEffect(() => {
     resetWorld();
+    if (window.matchMedia("(max-width: 760px)").matches) {
+      setShowLeft(false);
+      setShowRight(false);
+      setViewMode("2d");
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const switchExperiment = (next: Experiment) => {
@@ -555,7 +560,7 @@ export default function Home() {
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = Math.min(window.devicePixelRatio || 1, window.innerWidth <= 760 ? 1.35 : 2);
       const rect = canvas.getBoundingClientRect();
       if (canvas.width !== Math.floor(rect.width * ratio)) {
         canvas.width = Math.floor(rect.width * ratio);
@@ -705,7 +710,7 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = Math.min(window.devicePixelRatio || 1, window.innerWidth <= 760 ? 1.35 : 2);
     if (canvas.width !== Math.floor(rect.width * ratio)) {
       canvas.width = Math.floor(rect.width * ratio);
       canvas.height = Math.floor(rect.height * ratio);
@@ -758,7 +763,7 @@ export default function Home() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
+    const ratio = Math.min(window.devicePixelRatio || 1, window.innerWidth <= 760 ? 1.35 : 2);
     if (canvas.width !== Math.floor(rect.width * ratio)) {
       canvas.width = Math.floor(rect.width * ratio);
       canvas.height = Math.floor(rect.height * ratio);
@@ -948,7 +953,7 @@ export default function Home() {
     ) => {
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
-      const ratio = window.devicePixelRatio || 1;
+      const ratio = Math.min(window.devicePixelRatio || 1, window.innerWidth <= 760 ? 1.35 : 2);
       canvas.width = Math.max(1, Math.floor(rect.width * ratio));
       canvas.height = Math.max(1, Math.floor(rect.height * ratio));
       const ctx = canvas.getContext("2d");
@@ -1273,6 +1278,24 @@ export default function Home() {
           {error}
         </div>
       )}
+
+      <nav className="mobile-dock" aria-label="手机端实验导航">
+        <button className={showLeft ? "active" : ""} onClick={() => {
+          setShowLeft((value) => !value);
+          setShowRight(false);
+          window.setTimeout(() => document.querySelector(".left-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+        }}>◫<span>实验设置</span></button>
+        <button onClick={() => {
+          setShowLeft(false);
+          setShowRight(false);
+          window.setTimeout(() => document.querySelector(".stage")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+        }}>◎<span>系统视图</span></button>
+        <button className={showRight ? "active" : ""} onClick={() => {
+          setShowRight((value) => !value);
+          setShowLeft(false);
+          window.setTimeout(() => document.querySelector(".right-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }), 40);
+        }}>⌁<span>音乐分析</span></button>
+      </nav>
 
       <section className={`workspace ${!showLeft ? "hide-left" : ""} ${!showRight ? "hide-right" : ""}`}>
         <aside className={`left-panel ${!showLeft ? "panel-hidden" : ""}`}>
