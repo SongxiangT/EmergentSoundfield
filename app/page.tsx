@@ -199,6 +199,7 @@ export default function Home() {
   const [spectrum, setSpectrum] = useState<SpectrumName | "random">("earth");
   const [randomSpectrum, setRandomSpectrum] = useState<SpectrumName>("aurora");
   const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");
+  const [cameraMode, setCameraMode] = useState<"default" | "top" | "side" | "orbit" | "auto">("default");
   const [edgeOpacity, setEdgeOpacity] = useState(72);
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
@@ -586,6 +587,72 @@ export default function Home() {
   }, [addLog, current, gridSize]);
 
   const stepPlant = useCallback((f: Features, e: Emotion) => {
+    // Original botanical CA: deliberately simple, legible state transitions.
+    {
+      const grid = gridRef.current;
+      const age = ageRef.current;
+      const next = grid.slice();
+      const nextAge = age.slice();
+      const size = gridSize;
+      const random = randRef.current;
+      const surface = Math.floor(size * 0.46);
+      const intensity = f.rms * 0.34 + f.low * 0.2 + f.mid * 0.2 + f.high * 0.08 + f.onset * 0.18;
+      const musicDrive = Math.pow(Math.max(0, (intensity - 0.14) / 0.86), 2.35);
+      const growth = 0.018 + musicDrive * 0.16 + e.valence * 0.018;
+      const branching = 0.008 + musicDrive * musicDrive * 0.18;
+      let changed = 0;
+      let living = 0;
+      for (let y = 1; y < size - 1; y++) for (let x = 1; x < size - 1; x++) {
+        const i = y * size + x;
+        const state = grid[i];
+        nextAge[i] = Math.min(255, age[i] + 1);
+        if (state >= 2 && state <= 6) living++;
+        if (state === 0 && y >= surface && random() < 0.0002 + e.valence * 0.00025) {
+          next[i] = 1; changed++;
+        } else if (state === 1) {
+          const seedNear = grid[i - size] === 2 || grid[i - 1] === 3 || grid[i + 1] === 3;
+          if (seedNear && random() < 0.035 + musicDrive * 0.14) { next[i] = 3; nextAge[i] = 0; changed++; }
+        } else if (state === 2 && age[i] > 6 && random() < growth) {
+          if (grid[i + size] <= 1) next[i + size] = 3;
+          if (grid[i - size] === 0) next[i - size] = 4;
+          next[i] = 4; nextAge[i] = 0; changed += 2;
+        } else if (state === 3 && random() < growth * 0.42) {
+          const target = i + size + (random() < 0.34 ? (random() < 0.5 ? -1 : 1) : 0);
+          if (grid[target] <= 1) { next[target] = 3; nextAge[target] = 0; changed++; }
+        } else if (state === 4) {
+          if (grid[i - size] === 0 && random() < growth) {
+            next[i - size] = age[i] > 16 && random() < 0.42 ? 5 : 4; nextAge[i - size] = 0; changed++;
+          }
+          if (age[i] > 12 && random() < branching) {
+            const target = i + (random() < 0.5 ? -1 : 1);
+            if (grid[target] === 0) { next[target] = 5; nextAge[target] = 0; changed++; }
+          }
+        } else if (state === 5 && age[i] > 24 && musicDrive + e.valence > 0.72 && random() < 0.006 + musicDrive * 0.028) {
+          next[i] = 6; nextAge[i] = 0; changed++;
+        } else if (state === 6 && age[i] > 50 && random() < 0.008 + musicDrive * 0.012) {
+          const spread = Math.max(2, Math.floor(size * 0.035));
+          const tx = Math.max(1, Math.min(size - 2, x + Math.floor((random() - 0.5) * spread * 2)));
+          const target = (surface - 1) * size + tx;
+          if (grid[target] === 0) { next[target] = 2; nextAge[target] = 0; changed++; }
+        } else if ((state === 3 || state === 4 || state === 5 || state === 6) && age[i] > 235 && random() < 0.002) {
+          next[i] = 7; nextAge[i] = 0; changed++;
+        } else if (state === 7 && age[i] > 38) {
+          next[i] = y >= surface ? 1 : 0; nextAge[i] = 0; changed++;
+        }
+      }
+      gridRef.current = next;
+      ageRef.current = nextAge;
+      const m = metricsRef.current;
+      m.active = living;
+      m.max = Math.max(m.max, living);
+      m.critical = Math.min(1, changed / Math.max(1, size * 0.9));
+      m.entropy = Math.min(1, 0.16 + m.critical * 0.5 + living / next.length * 2 + musicDrive * 0.12);
+      if (changed > size * 0.55 && m.events % 10 === 0) addLog(`t+${fmtTime(current)} 生长脉冲 · 状态跃迁 ${changed}`);
+      if (changed) m.events++;
+      chaosRef.current.push(m.entropy);
+      if (chaosRef.current.length > 120) chaosRef.current.shift();
+      return;
+    }
     const grid = gridRef.current;
     const age = ageRef.current;
     const energy = energyRef.current;
@@ -709,7 +776,9 @@ export default function Home() {
     const nextAge = age.slice();
     const size = gridSize;
     const random = randRef.current;
-    const gravity = 2 + Math.floor(Math.pow(f.low * 0.72 + e.arousal * 0.28, 1.55) * 4);
+    const intensity = f.rms * 0.36 + f.low * 0.26 + f.mid * 0.14 + f.high * 0.08 + f.onset * 0.16;
+    const musicDrive = Math.pow(Math.max(0, (intensity - 0.16) / 0.84), 2.5);
+    const gravity = 2 + Math.floor(musicDrive * 4);
     let changed = 0;
     let luminous = 0;
     for (let y = 1; y < size - 1; y++) for (let x = 1; x < size - 1; x++) {
@@ -724,25 +793,25 @@ export default function Home() {
       }
       nextAge[i] = Math.min(255, age[i] + 1);
       if (state >= 3 && state <= 6) luminous++;
-      if (state === 0 && density >= gravity && random() < 0.08 + f.rms * 0.24) {
+      if (state === 0 && density >= gravity && random() < 0.025 + musicDrive * 0.12) {
         next[i] = 1; nextAge[i] = 0; changed++;
-      } else if (state === 1 && density >= Math.max(2, gravity - 1) && random() < 0.045 + Math.pow(f.low, 1.6) * 0.21) {
+      } else if (state === 1 && density >= Math.max(2, gravity - 1) && random() < 0.018 + musicDrive * 0.1) {
         next[i] = 2; nextAge[i] = 0; changed++;
-      } else if (state === 2 && density >= gravity && random() < 0.025 + Math.pow(f.onset, 1.7) * 0.24) {
+      } else if (state === 2 && density >= gravity && random() < 0.008 + musicDrive * musicDrive * 0.12) {
         next[i] = 3; nextAge[i] = 0; changed++;
       } else if (state === 3 && age[i] > 18) {
         next[i] = 4; nextAge[i] = 0; changed++;
       } else if (state === 4 && age[i] > 90 - Math.floor(e.arousal * 42)) {
-        next[i] = f.low + f.onset > 0.88 ? 5 : 6; nextAge[i] = 0; changed++;
+        next[i] = musicDrive > 0.58 ? 5 : 6; nextAge[i] = 0; changed++;
       } else if (state === 5) {
         if (age[i] < 5) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
           const n = i + oy * size + ox;
-          if ((ox || oy) && grid[n] < 3 && random() < 0.5 + f.onset * 0.4) next[n] = 2;
+          if ((ox || oy) && grid[n] < 3 && random() < 0.28 + musicDrive * 0.42) next[n] = 2;
         }
-        if (age[i] > 12) { next[i] = random() < 0.22 + f.low * 0.28 ? 7 : 6; nextAge[i] = 0; changed++; }
+        if (age[i] > 12) { next[i] = random() < 0.14 + musicDrive * 0.25 ? 7 : 6; nextAge[i] = 0; changed++; }
       } else if (state === 6 && age[i] > 75 && random() < 0.025) {
         next[i] = 1; nextAge[i] = 0; changed++;
-      } else if (state === 7 && stellar > 0 && random() < 0.04 + f.low * 0.16) {
+      } else if (state === 7 && stellar > 0 && random() < 0.015 + musicDrive * 0.07) {
         next[i] = 7;
       }
     }
@@ -752,7 +821,7 @@ export default function Home() {
     m.active = luminous;
     m.max = Math.max(m.max, luminous);
     m.critical = Math.min(1, changed / Math.max(1, size * 0.62));
-    m.entropy = Math.min(1, 0.12 + m.critical * 0.48 + luminous / next.length * 5 + f.rms * 0.14);
+    m.entropy = Math.min(1, 0.12 + m.critical * 0.48 + luminous / next.length * 5 + musicDrive * 0.12);
     if (changed > size * 0.45 && m.events % 9 === 0) addLog(`t+${fmtTime(current)} 恒星形成事件 · 物质跃迁 ${changed}`);
     if (changed) m.events++;
     chaosRef.current.push(m.entropy);
@@ -781,6 +850,9 @@ export default function Home() {
       const ox = (rect.width - side) / 2;
       const oy = (rect.height - side) / 2;
       const grid = gridRef.current;
+      const activeCamera = cameraMode === "auto"
+        ? (["default", "orbit", "top", "side"] as const)[Math.floor(time / 7000) % 4]
+        : cameraMode;
       ctx.fillStyle = experiment === "sand" ? "#071516" : "#08130f";
       ctx.fillRect(ox, oy, side, side);
       const activeSpectrum = spectrum === "random" ? randomSpectrum : spectrum;
@@ -833,8 +905,18 @@ export default function Home() {
           const hash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
           const depth = ((hash % 997) / 997) * 0.72 + 0.28;
           const drift = Math.sin(time * 0.00008 + hash) * f.low * 5;
-          const px = ox + side * 0.5 + (x / size - 0.5) * side * depth + drift;
-          const py = oy + side * 0.5 + (y / size - 0.5) * side * depth + Math.cos(time * 0.00006 + hash) * f.mid * 3;
+          let nx = (x / size - 0.5) * depth;
+          let ny = (y / size - 0.5) * depth;
+          if (activeCamera === "orbit") {
+            const angle = time * 0.00012;
+            const rotatedX = nx * Math.cos(angle) - ny * Math.sin(angle);
+            ny = nx * Math.sin(angle) + ny * Math.cos(angle);
+            nx = rotatedX;
+          }
+          const px = activeCamera === "side" ? ox + side * 0.5 + nx * side + drift : ox + side * 0.5 + nx * side + drift;
+          const py = activeCamera === "side"
+            ? oy + side * 0.5 + (depth - 0.64) * side * 0.42 + ny * side * 0.16
+            : oy + side * 0.5 + ny * side + Math.cos(time * 0.00006 + hash) * f.mid * 3;
           const radius = value <= 2 ? 0.7 + value * 0.8 : value === 5 ? 8 + f.onset * 12 : value === 7 ? 7 : 2.6 + depth * 3.8;
           if (value === 1 || value === 2) {
             const cloud = ctx.createRadialGradient(px, py, 0, px, py, radius * 5);
@@ -875,8 +957,21 @@ export default function Home() {
             const gx = Math.min(size - 1, x * stride);
             const gy = Math.min(size - 1, y * stride);
             const cellValue = grid[gy * size + gx];
-            const px = centerX + (x - y) * unit;
-            const groundY = baseY + (x + y) * unit * 0.47;
+            let px = centerX + (x - y) * unit;
+            let groundY = baseY + (x + y) * unit * 0.47;
+            if (activeCamera === "top") {
+              px = ox + (x + 0.5) / count * side;
+              groundY = oy + (y + 0.5) / count * side;
+            } else if (activeCamera === "side") {
+              px = ox + (x + 0.5) / count * side;
+              groundY = oy + side * 0.73 + (y / count - 0.5) * side * 0.18;
+            } else if (activeCamera === "orbit") {
+              const angle = time * 0.00016;
+              const rx = (x - count / 2) * Math.cos(angle) - (y - count / 2) * Math.sin(angle);
+              const ry = (x - count / 2) * Math.sin(angle) + (y - count / 2) * Math.cos(angle);
+              px = centerX + rx * unit * 1.42;
+              groundY = oy + side * 0.48 + ry * unit * 0.68;
+            }
             ctx.globalAlpha = 0.88;
             ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
             if (experiment === "plant") {
@@ -1000,7 +1095,7 @@ export default function Home() {
       ctx.lineWidth = 1;
       ctx.strokeRect(ox + 4, oy + 4, side - 8, side - 8);
     },
-    [experiment, gridSize, randomSpectrum, spectrum, viewMode],
+    [cameraMode, experiment, gridSize, randomSpectrum, spectrum, viewMode],
   );
 
   const drawChaos = useCallback(() => {
@@ -1471,6 +1566,10 @@ export default function Home() {
 
   const risk = experiment === "sand" ? stats.critical : emotion.tension;
   const fastValue = (value: number) => `${Math.round(Math.pow(Math.max(0, Math.min(1, value)), 1.45) * 100)}%`;
+  const ecologicalIntensity = features.rms * 0.34 + features.low * 0.2 + features.mid * 0.2 + features.high * 0.08 + features.onset * 0.18;
+  const ecologicalDrive = Math.pow(Math.max(0, (ecologicalIntensity - 0.14) / 0.86), 2.35);
+  const cosmicIntensity = features.rms * 0.36 + features.low * 0.26 + features.mid * 0.14 + features.high * 0.08 + features.onset * 0.16;
+  const cosmicDrive = Math.pow(Math.max(0, (cosmicIntensity - 0.16) / 0.84), 2.5);
   const worldItems =
     experiment === "sand"
       ? [["Threshold", "4", "Toppling gate"], ["Friction", (0.35 + emotion.stability * 0.45).toFixed(2), "Stability"], ["Gravity", `${(0.72 + emotion.arousal * 0.56).toFixed(2)}g`, "Arousal"], ["Diffusion", (0.08 + features.centroid * 0.42).toFixed(2), "Centroid"]]
@@ -1483,8 +1582,8 @@ export default function Home() {
             : experiment === "gh"
               ? [["Resting", "0", "Quiescent state"], ["Excited", "1", "Wave front"], ["Refractory", "2–8", "Recovery cycle"], ["Excite threshold", `${Math.max(1, 3 - Math.floor(Math.pow(features.onset, 1.5) * 2))}`, "Onset exponent"]]
               : experiment === "plant"
-                ? [["Soil fertility", `${Math.round((0.38 + emotion.valence * 0.56) * 100)}%`, "Valence"], ["Root pressure", fastValue(features.low), "Low frequency"], ["Photosynthesis", fastValue(features.mid), "Mid-band energy"], ["Branching", fastValue(features.high * 0.55 + features.onset * 0.45), "High + onset"]]
-                : [["Gravity density", `${2 + Math.floor(Math.pow(features.low * 0.72 + emotion.arousal * 0.28, 1.55) * 4)}`, "Low-band gravity"], ["Star birth", fastValue(features.onset), "Onset collapse"], ["Radiation", fastValue(features.centroid), "Spectral centroid"], ["Expansion", `${(0.45 + emotion.stability * 0.72).toFixed(2)}`, "Slow stability"]];
+                ? [["Soil fertility", `${Math.round((0.38 + emotion.valence * 0.56) * 100)}%`, "Valence"], ["Growth drive", fastValue(ecologicalDrive), "Gated music intensity"], ["Growth regime", ecologicalDrive > 0.58 ? "CLIMAX" : ecologicalDrive > 0.18 ? "ACTIVE" : "CALM", "Nonlinear tier"], ["Branching", fastValue(ecologicalDrive * ecologicalDrive), "Drive²"]]
+                : [["Gravity density", `${2 + Math.floor(cosmicDrive * 4)}`, "Gated gravity"], ["Star birth", fastValue(cosmicDrive * cosmicDrive), "Drive² collapse"], ["Radiation", fastValue(cosmicDrive * features.centroid), "Drive × centroid"], ["Expansion", `${(0.45 + emotion.stability * 0.72).toFixed(2)}`, "Slow stability"]];
   const defaultMappingGroups = [
     {
       title: "FAST LAYER",
@@ -1517,12 +1616,12 @@ export default function Home() {
     {
       title: "COSMIC FORCING",
       items: [
-        ["引力扰动", fastValue(features.low), "Low band · collapse field"],
-        ["辐射通量", fastValue(features.high), "High band · photon flux"],
-        ["物质密度波", fastValue(features.mid), "Mid band · gas density"],
-        ["恒星形成率", fastValue(features.onset), "Onset · ignition probability"],
-        ["背景能量", fastValue(features.rms), "RMS · vacuum energy"],
-        ["恒星温度色", fastValue(features.centroid), "Centroid · radiation color"],
+        ["引力扰动", fastValue(cosmicDrive), "Gated intensity · collapse"],
+        ["辐射通量", fastValue(cosmicDrive * features.high), "Drive × high band"],
+        ["物质密度波", fastValue(cosmicDrive * features.mid), "Drive × gas density"],
+        ["恒星形成率", fastValue(cosmicDrive * cosmicDrive), "Drive² · ignition"],
+        ["背景能量", fastValue(cosmicDrive * features.rms), "Drive × RMS"],
+        ["恒星温度色", fastValue(cosmicDrive * features.centroid), "Drive × centroid"],
       ],
     },
     {
@@ -1692,6 +1791,24 @@ export default function Home() {
               aria-label="切换二维和三维实验视角"
             />
           </div>
+          {viewMode === "3d" && (
+            <div className="camera-console" aria-label="三维镜头控制">
+              <div><span>CAMERA</span><em>{cameraMode === "auto" ? "AUTO CRUISE · 7s" : cameraMode.toUpperCase()}</em></div>
+              <div className="camera-options">
+                {([
+                  ["default", "初始"],
+                  ["top", "俯视"],
+                  ["side", "侧视"],
+                  ["orbit", "轨道"],
+                  ["auto", "自动"],
+                ] as const).map(([modeName, label]) => (
+                  <button key={modeName} className={cameraMode === modeName ? "active" : ""} onClick={() => setCameraMode(modeName)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="control-block">
             <label>驱动模式</label>
