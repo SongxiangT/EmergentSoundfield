@@ -96,6 +96,13 @@ body {
 .view-slider span { font:7px var(--font-geist-mono),monospace;color:#8eb4a5;letter-spacing:.08em; }
 .view-slider strong { font-size:9px;color:#f1c15e; }
 .view-slider input { width:100%;accent-color:#f1c15e;cursor:grab; }
+.camera-console { margin-top:7px;padding:9px;background:#f7f9f8;border:1px solid #cbd5d1;border-radius:4px;box-shadow:0 3px 10px rgba(25,52,69,.05); }
+.camera-console > div:first-child { display:flex;align-items:center;justify-content:space-between;margin-bottom:7px; }
+.camera-console span,.camera-console em { font:7px var(--font-geist-mono),monospace;letter-spacing:.1em; }
+.camera-console span { color:#304a5b;font-weight:800; }.camera-console em { color:#83928c;font-style:normal; }
+.camera-options { display:grid;grid-template-columns:repeat(5,1fr);gap:3px; }
+.camera-options button { min-width:0;padding:6px 2px;border:1px solid #cad4d0;background:#fff;color:#64746d;border-radius:2px;font-size:8px;cursor:pointer; }
+.camera-options button.active { background:#173f37;border-color:#173f37;color:#fff;box-shadow:0 0 0 1px rgba(23,63,55,.16); }
 .control-block { border-top:1px solid var(--line); padding-top:17px; margin-top:18px; }
 .control-block > label,.label-row label,.seed label { font-size:11px;font-weight:800;letter-spacing:.06em;display:block;margin-bottom:10px; }
 .control-block p { font-size:10px;line-height:1.7;color:var(--muted);margin:9px 2px 0; }
@@ -263,9 +270,9 @@ input[type="range"] { width:100%;height:3px;accent-color:#d16b49;cursor:pointer;
 .metric-label strong { font:9px var(--font-geist-mono),monospace; }
 .track { height:3px;background:#dfe5df;overflow:hidden;border-radius:4px; }.track i { display:block;height:100%;transition:width .15s; }
 .emotion-head,.world-head { margin-top:23px;padding-top:17px;border-top:1px solid var(--line); }
-.radar-instrument { height:220px;position:relative;background:#fbfcfa;border:1px solid #aebbc2;border-radius:3px;margin:2px 0 10px;max-width:none;box-shadow:inset 0 0 0 4px #f2f5f4,0 7px 18px rgba(25,52,69,.1);overflow:hidden; }
+.radar-instrument { width:220px;height:220px;position:relative;background:radial-gradient(circle,#fff 0,#f4f7f5 72%);border:1px solid #aebbc2;border-radius:50%;margin:2px auto 12px;max-width:100%;box-shadow:inset 0 0 0 5px #eef2f0,0 7px 18px rgba(25,52,69,.1);overflow:hidden; }
 .radar-instrument canvas { width:100%;height:100%;display:block; }
-.radar-instrument::before { content:"ENTROPY DESCENT / FLIGHT PATH";position:absolute;top:7px;left:9px;color:#556d7b;font:7px var(--font-geist-mono),monospace;letter-spacing:.13em; }
+.radar-instrument::before { content:"4D EMOTION / ENTROPY";position:absolute;top:9px;left:50%;transform:translateX(-50%);white-space:nowrap;color:#556d7b;font:7px var(--font-geist-mono),monospace;letter-spacing:.13em; }
 .radar-instrument::after { content:"LIVE";position:absolute;top:7px;right:9px;color:#c44e3f;font:7px var(--font-geist-mono),monospace;letter-spacing:.13em; }
 .radar-label { position:absolute;color:#627786;background:rgba(251,252,250,.86);padding:2px 4px;font:6px var(--font-geist-mono),monospace;letter-spacing:.06em; }.radar-label.top{top:22px;left:50%;transform:translateX(-50%)}.radar-label.right{right:5px;top:50%}.radar-label.bottom{bottom:18px;left:50%;transform:translateX(-50%)}.radar-label.left{left:5px;top:50%}
 .emotion-grid { display:grid;grid-template-columns:1fr 1fr;gap:7px; }
