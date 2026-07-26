@@ -976,8 +976,7 @@ export default function Home() {
             ctx.globalAlpha = 0.88;
             ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
             if (experiment === "gh") {
-              ctx.globalAlpha = 0.34;
-              ctx.fillStyle = cellValue === 0 ? "rgba(91,161,174,.12)" : palette[Math.min(cellValue, palette.length - 1)];
+              ctx.globalAlpha = 0.16;
               ctx.beginPath();
               if (activeCamera === "top") {
                 const tile = side / count;
@@ -986,8 +985,7 @@ export default function Home() {
                 ctx.moveTo(px, groundY - unit * 0.3); ctx.lineTo(px + unit, groundY);
                 ctx.lineTo(px, groundY + unit * 0.3); ctx.lineTo(px - unit, groundY); ctx.closePath();
               }
-              ctx.fill();
-              ctx.strokeStyle = "rgba(137,211,221,.12)";
+              ctx.strokeStyle = "rgba(137,211,221,.2)";
               ctx.lineWidth = 0.45;
               ctx.stroke();
               if (cellValue > 0) {
@@ -1111,30 +1109,6 @@ export default function Home() {
           ctx.strokeStyle = "#d26355"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 42, ay); ctx.stroke(); ctx.fillStyle = "#d26355"; ctx.fillText("X", ax + 47, ay + 3);
           ctx.strokeStyle = "#64b879"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 22, ay - 24); ctx.stroke(); ctx.fillStyle = "#64b879"; ctx.fillText("Y", ax + 25, ay - 27);
           ctx.strokeStyle = "#6fa4d8"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay - 48); ctx.stroke(); ctx.fillStyle = "#6fa4d8"; ctx.fillText("Z", ax - 3, ay - 54);
-        } else if (experiment === "gh") {
-          const inset = side * 0.055;
-          const glass = ctx.createLinearGradient(ox, oy, ox + side, oy + side);
-          glass.addColorStop(0, "rgba(154,231,239,.2)");
-          glass.addColorStop(0.45, "rgba(38,92,106,.04)");
-          glass.addColorStop(1, "rgba(111,190,204,.16)");
-          ctx.fillStyle = glass;
-          ctx.fillRect(ox + inset, oy + inset, side - inset * 2, side - inset * 2);
-          ctx.strokeStyle = "rgba(185,244,249,.86)";
-          ctx.lineWidth = 3;
-          ctx.shadowColor = "rgba(94,210,224,.72)";
-          ctx.shadowBlur = 12;
-          ctx.strokeRect(ox + inset, oy + inset, side - inset * 2, side - inset * 2);
-          ctx.shadowBlur = 0;
-          ctx.strokeStyle = "rgba(24,73,86,.72)";
-          ctx.lineWidth = 8;
-          ctx.strokeRect(ox + inset - 5, oy + inset - 5, side - inset * 2 + 10, side - inset * 2 + 10);
-          ctx.strokeStyle = "rgba(201,250,252,.5)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(ox + inset + 5, oy + inset + 5, side - inset * 2 - 10, side - inset * 2 - 10);
-          ctx.fillStyle = "rgba(188,240,242,.75)";
-          ctx.font = "8px monospace";
-          ctx.textAlign = "left";
-          ctx.fillText("EXCITABLE GLASS MEDIUM · REFRACTORY FIELD", ox + inset + 12, oy + inset + 18);
         }
       }
       const pulse = 1 + f.onset * 7 + Math.sin(time / 130) * f.low * 2;
