@@ -245,6 +245,9 @@ input[type="range"] { width:100%;height:3px;accent-color:#d16b49;cursor:pointer;
 .music-report header span { font:8px var(--font-geist-mono),monospace;color:#9a7550;letter-spacing:.14em; }
 .music-report h2 { margin:4px 0 0;font:500 18px Georgia,"Songti SC",serif; }
 .music-report header button { width:25px;height:25px;border:1px solid var(--line);background:#fff;border-radius:50%;cursor:pointer; }
+.report-actions { display:flex;align-items:center;gap:6px; }
+.music-report header .download-report { width:auto;height:28px;padding:0 10px;border-radius:4px;background:#173f37;color:#fff;border-color:#173f37;font-size:8px;font-weight:700;letter-spacing:.06em; }
+.music-report header .download-report:hover { background:#245b4e; }
 .report-grid { display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin:13px 0; }
 .report-grid div { background:#edf1eb;border-radius:6px;padding:9px; }.report-grid span,.report-grid strong { display:block; }.report-grid span { font-size:8px;color:#74817b; }.report-grid strong { font:16px var(--font-geist-mono),monospace;margin-top:4px;color:#173f37; }
 .report-charts { display:grid;grid-template-columns:1.35fr 1fr;gap:9px;margin:10px 0 12px; }
