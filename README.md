@@ -1,5 +1,9 @@
 # Emergent Soundfield / 涌现声场
 
+<p align="center">
+  <img src="https://emergent-soundfield-lab.songxiangtang.chatgpt.site/modafinil-studio.png" width="132" alt="莫达非尼工作室标志" />
+</p>
+
 一个音乐驱动的复杂系统可视化实验室。上传音乐、输入音频直链，或直接播放内置原创曲《国风-2》，观察节奏、频谱与连续情绪如何改变临界系统、传播系统、种群系统和元胞自动机的演化路径。
 
 > 本项目用于交互艺术、复杂系统科普与娱乐性实验，不构成正式科学结论。
@@ -8,18 +12,61 @@
 
 **[打开 Emergent Soundfield](https://emergent-soundfield-lab.songxiangtang.chatgpt.site)**
 
+## 首要界面介绍
+
+首页是一张可实时操作的“复杂系统任务控制台”：
+
+1. **左侧实验台**：选择七种复杂系统、2D/3D 视角、网格规模、色谱、随机种子与音乐映射强度。
+2. **中央世界窗口**：观察元胞更新、BPM 边缘遥测、实时熵相空间和 NASA Mission Log 事件流。
+3. **右侧遥测台**：读取音频 FAST 特征、SLOW 情绪状态、熵四象飞行轨迹和每个模型独立的世界参数。
+4. **实验报告**：音乐结束后输出坍塌规模时间序列、统计检验、相图与 Music Fingerprint。
+
 ## 核心功能
 
-- 五种复杂系统：沙堆临界、森林火灾、Lotka–Volterra、Cyclic Cellular Automata、Greenberg–Hastings Excitable Media。
+- 七种复杂系统：沙堆临界、森林火灾、Lotka–Volterra、Cyclic CA、Greenberg–Hastings、土壤植物生长 CA 与宇宙物质演化 CA。
 - 本地音频上传、音频直链与内置原创音乐。
 - FFT 音频分析：RMS、低频、中频、高频、Onset、频谱质心和 BPM。
 - FAST / SLOW 双时间尺度音乐映射，可逐项关闭。
 - 64、128、256、512 或自定义 Grid。
 - 2D 上帝视角与 3D 世界视角。
 - 与 Grid 等高的左右节拍遥测带。
-- 连续情绪雷达：Arousal、Valence、Tension、Stability。
+- 熵四象轨迹：将 Arousal、Valence、Tension、Stability 与 Entropy 映射为类似再入/坠落路线的历史曲线。
 - NASA Mission Log 风格事件记录。
 - 音乐结束后生成统计报告、时间序列、相图与 Music Fingerprint。
+
+## 数据 Pipeline
+
+```mermaid
+flowchart LR
+    A["音乐输入<br/>上传 / URL / 国风-2"] --> B["Web Audio API<br/>FFT + 时域采样"]
+    B --> C["FAST 特征<br/>RMS · Low · Mid · High<br/>Onset · Centroid · BPM"]
+    C --> D["非线性映射<br/>归一化 · 指数放大 · 阈值"]
+    C --> E["SLOW 状态<br/>Arousal · Valence<br/>Tension · Stability"]
+    E --> D
+    D --> F["模型专属参数<br/>FAST 6 + SLOW 6 + WORLD 4"]
+    F --> G{"复杂系统内核"}
+    G --> G1["Sandpile / Fire"]
+    G --> G2["Lotka–Volterra"]
+    G --> G3["Cyclic / G–H CA"]
+    G --> G4["Botanical / Cosmic CA"]
+    G1 --> H["元胞状态更新"]
+    G2 --> H
+    G3 --> H
+    G4 --> H
+    H --> I["实时观测<br/>Entropy · Event Size · Criticality"]
+    I --> J["2D / XYZ 3D 可视化"]
+    I --> K["Mission Log"]
+    I --> L["统计报告与 Music Fingerprint"]
+    I -. "历史反馈" .-> F
+```
+
+核心思想不是把音乐直接“画成波形”，而是让音乐先改变规则参数，再由系统的历史状态、邻域关系和反馈共同决定下一步演化。
+
+## 莫达非尼工作室
+
+**莫达非尼工作室（Modafinil Studio）**关注科学计算、生成艺术、声音实验和交互叙事之间的交叉地带。我们希望把通常只存在于论文、公式或实验室中的复杂概念，转化为可触摸、可聆听、可反复试验的数字体验。
+
+烧瓶中的字母 **M** 是工作室的视觉标志：烧瓶代表实验方法，轨迹与粒子代表从微观规则中涌现出的宏观秩序。Emergent Soundfield 是工作室关于“声音能否成为复杂系统外部驱动力”的持续实验。
 
 ## 科学构想
 
@@ -84,7 +131,7 @@ $$
 
 其中 \(z_t\) 是复杂系统状态，\(\theta\) 是世界参数。
 
-## 五种复杂系统
+## 七种复杂系统
 
 ### Sandpile / 沙堆临界
 
