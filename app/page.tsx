@@ -975,7 +975,34 @@ export default function Home() {
             }
             ctx.globalAlpha = 0.88;
             ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
-            if (experiment === "plant") {
+            if (experiment === "gh") {
+              ctx.globalAlpha = 0.34;
+              ctx.fillStyle = cellValue === 0 ? "rgba(91,161,174,.12)" : palette[Math.min(cellValue, palette.length - 1)];
+              ctx.beginPath();
+              if (activeCamera === "top") {
+                const tile = side / count;
+                ctx.rect(px - tile * 0.48, groundY - tile * 0.48, tile * 0.96, tile * 0.96);
+              } else {
+                ctx.moveTo(px, groundY - unit * 0.3); ctx.lineTo(px + unit, groundY);
+                ctx.lineTo(px, groundY + unit * 0.3); ctx.lineTo(px - unit, groundY); ctx.closePath();
+              }
+              ctx.fill();
+              ctx.strokeStyle = "rgba(137,211,221,.12)";
+              ctx.lineWidth = 0.45;
+              ctx.stroke();
+              if (cellValue > 0) {
+                const pulseHeight = unit * (0.45 + (9 - cellValue) * 0.13);
+                ctx.globalAlpha = cellValue === 1 ? 1 : 0.5;
+                ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.shadowBlur = cellValue === 1 ? 14 : 5;
+                ctx.fillRect(px - unit * 0.13, groundY - pulseHeight, unit * 0.26, pulseHeight);
+                ctx.beginPath();
+                ctx.arc(px, groundY - pulseHeight, unit * (cellValue === 1 ? 0.34 : 0.22), 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+              }
+            } else if (experiment === "plant") {
               const soil = gy >= size * 0.46;
               ctx.fillStyle = soil ? (cellValue === 1 ? "#65452b" : "#30231b") : "rgba(8,28,21,.18)";
               ctx.beginPath();
@@ -1084,6 +1111,30 @@ export default function Home() {
           ctx.strokeStyle = "#d26355"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 42, ay); ctx.stroke(); ctx.fillStyle = "#d26355"; ctx.fillText("X", ax + 47, ay + 3);
           ctx.strokeStyle = "#64b879"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 22, ay - 24); ctx.stroke(); ctx.fillStyle = "#64b879"; ctx.fillText("Y", ax + 25, ay - 27);
           ctx.strokeStyle = "#6fa4d8"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay - 48); ctx.stroke(); ctx.fillStyle = "#6fa4d8"; ctx.fillText("Z", ax - 3, ay - 54);
+        } else if (experiment === "gh") {
+          const inset = side * 0.055;
+          const glass = ctx.createLinearGradient(ox, oy, ox + side, oy + side);
+          glass.addColorStop(0, "rgba(154,231,239,.2)");
+          glass.addColorStop(0.45, "rgba(38,92,106,.04)");
+          glass.addColorStop(1, "rgba(111,190,204,.16)");
+          ctx.fillStyle = glass;
+          ctx.fillRect(ox + inset, oy + inset, side - inset * 2, side - inset * 2);
+          ctx.strokeStyle = "rgba(185,244,249,.86)";
+          ctx.lineWidth = 3;
+          ctx.shadowColor = "rgba(94,210,224,.72)";
+          ctx.shadowBlur = 12;
+          ctx.strokeRect(ox + inset, oy + inset, side - inset * 2, side - inset * 2);
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = "rgba(24,73,86,.72)";
+          ctx.lineWidth = 8;
+          ctx.strokeRect(ox + inset - 5, oy + inset - 5, side - inset * 2 + 10, side - inset * 2 + 10);
+          ctx.strokeStyle = "rgba(201,250,252,.5)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(ox + inset + 5, oy + inset + 5, side - inset * 2 - 10, side - inset * 2 - 10);
+          ctx.fillStyle = "rgba(188,240,242,.75)";
+          ctx.font = "8px monospace";
+          ctx.textAlign = "left";
+          ctx.fillText("EXCITABLE GLASS MEDIUM · REFRACTORY FIELD", ox + inset + 12, oy + inset + 18);
         }
       }
       const pulse = 1 + f.onset * 7 + Math.sin(time / 130) * f.low * 2;
@@ -1348,6 +1399,44 @@ export default function Home() {
       samples: [...samples],
     });
   }, []);
+
+  const downloadReport = useCallback(() => {
+    if (!report) return;
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (char) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;",
+    })[char] ?? char);
+    const points = report.samples;
+    const maxEvent = Math.max(1, ...points.map((sample) => sample.eventSize));
+    const line = points.map((sample, index) => {
+      const x = points.length < 2 ? 0 : index / (points.length - 1) * 760;
+      const y = 210 - sample.entropy * 180;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(" ");
+    const eventBars = points.filter((_, index) => index % Math.max(1, Math.ceil(points.length / 100)) === 0).map((sample, index, list) => {
+      const x = list.length < 2 ? 0 : index / (list.length - 1) * 760;
+      const height = sample.eventSize / maxEvent * 82;
+      return `<rect x="${x.toFixed(1)}" y="${(210 - height).toFixed(1)}" width="3" height="${height.toFixed(1)}" fill="#e8a33d" opacity=".5"/>`;
+    }).join("");
+    const rows = points.filter((_, index) => index % Math.max(1, Math.ceil(points.length / 240)) === 0).map((sample) =>
+      `<tr><td>${sample.time.toFixed(2)}</td><td>${sample.energy.toFixed(4)}</td><td>${sample.entropy.toFixed(4)}</td><td>${sample.eventSize}</td><td>${sample.critical.toFixed(4)}</td></tr>`
+    ).join("");
+    const relation = `${Math.abs(report.correlation) < 0.2 ? "较弱" : Math.abs(report.correlation) < 0.5 ? "中等" : "较强"}${report.correlation >= 0 ? "正相关" : "负相关"}`;
+    const html = `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>涌现声场实验报告</title><style>
+      body{font-family:Arial,"Microsoft YaHei",sans-serif;color:#172a35;margin:40px auto;max-width:960px;line-height:1.65}header{border-bottom:3px solid #173f37;padding-bottom:18px}h1{margin:5px 0}.meta{color:#6c7d84;font-size:13px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:24px 0}.grid div{background:#f0f4f2;padding:13px;border:1px solid #d6dfdb}.grid b{display:block;font-size:20px;color:#173f37}.chart{border:1px solid #cad6d2;padding:14px}svg{width:100%;height:auto;background:#071a20}.legend{font-size:12px;color:#65767d}table{width:100%;border-collapse:collapse;font-size:11px;margin-top:18px}th,td{border:1px solid #d9e0dd;padding:5px;text-align:right}th{background:#e9efec}footer{margin-top:28px;color:#7c898e;font-size:11px}@media print{body{margin:15mm}.no-print{display:none}}
+    </style></head><body><header><div class="meta">MODAFINIL STUDIO · EMERGENT SOUNDFIELD</div><h1>音乐 × 系统混乱度实验报告</h1><div class="meta">${escapeHtml(fileName)} · ${escapeHtml(experimentMeta[experiment].title)} · Music Fingerprint ${report.fingerprint}</div></header>
+    <section class="grid"><div>平均 Entropy<b>${report.meanEntropy.toFixed(3)}</b></div><div>最高 Entropy<b>${report.maxEntropy.toFixed(3)}</b></div><div>能量相关 r<b>${report.correlation.toFixed(3)}</b></div><div>近似 p 值<b>${report.sufficient ? report.pApprox.toFixed(3) : "样本不足"}</b></div><div>记录长度<b>${fmtTime(report.duration)}</b></div><div>峰值事件<b>${report.peakEvent}</b></div><div>活跃时间点<b>${report.eventCount}</b></div><div>有效样本<b>${report.count}</b></div></section>
+    <section class="chart"><h2>Entropy 与事件规模时间轴</h2><svg viewBox="0 0 760 230" role="img"><line x1="0" y1="210" x2="760" y2="210" stroke="#52717b"/>${eventBars}<polyline points="${line}" fill="none" stroke="#72d4b0" stroke-width="3"/></svg><div class="legend">绿色：Entropy　橙色：事件规模　横轴：实验时间</div></section>
+    <h2>分析结论</h2><p>高能量片段平均混乱度为 <b>${report.highMean.toFixed(3)}</b>，低能量片段为 <b>${report.lowMean.toFixed(3)}</b>，近似 t = ${report.tScore.toFixed(2)}。能量与混乱度呈<b>${relation}</b>。${report.sufficient && report.pApprox < 0.05 ? "本次启发式检验达到近似显著水平。" : "本次结果未达到稳定的近似显著水平，可能受曲长、系统初态或事件稀疏影响。"}</p>
+    <h2>抽样数据</h2><table><thead><tr><th>时间 / s</th><th>能量</th><th>Entropy</th><th>事件规模</th><th>临界度</th></tr></thead><tbody>${rows}</tbody></table>
+    <footer>仅供娱乐与交互探索。特征、相关系数和 p 值为浏览器端启发式估计，不构成正式科学结论。可使用浏览器打印功能保存为 PDF。</footer></body></html>`;
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `Emergent-Soundfield-${report.fingerprint}.html`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [experiment, fileName, report]);
 
   useEffect(() => {
     if (!report) return;
@@ -2060,7 +2149,10 @@ export default function Home() {
                   <span>POST-TRACK STUDY</span>
                   <h2>音乐 × 系统混乱度报告</h2>
                 </div>
-                <button onClick={() => setReport(null)} aria-label="关闭报告">×</button>
+                <div className="report-actions">
+                  <button className="download-report" onClick={downloadReport}>↓ 下载报告</button>
+                  <button onClick={() => setReport(null)} aria-label="关闭报告">×</button>
+                </div>
               </header>
               <div className="report-grid">
                 <div><span>平均 Entropy</span><strong>{report.meanEntropy.toFixed(3)}</strong></div>
