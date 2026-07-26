@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState } from "react";
 
-type Experiment = "sand" | "fire" | "lotka" | "cyclic" | "gh";
+type Experiment = "sand" | "fire" | "lotka" | "cyclic" | "gh" | "plant" | "cosmos";
 type DriveMode = "auto" | "hybrid" | "manual";
 type Features = {
   rms: number;
@@ -160,6 +160,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chaosCanvasRef = useRef<HTMLCanvasElement>(null);
   const radarCanvasRef = useRef<HTMLCanvasElement>(null);
+  const radarTrailRef = useRef<Array<{ x: number; y: number; entropy: number }>>([]);
   const reportTimelineRef = useRef<HTMLCanvasElement>(null);
   const reportScatterRef = useRef<HTMLCanvasElement>(null);
   const reportPhaseRef = useRef<HTMLCanvasElement>(null);
@@ -171,6 +172,10 @@ export default function Home() {
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const gridRef = useRef<Uint8Array>(new Uint8Array(DEFAULT_SIZE * DEFAULT_SIZE));
   const ageRef = useRef<Uint8Array>(new Uint8Array(DEFAULT_SIZE * DEFAULT_SIZE));
+  const energyRef = useRef<Float32Array>(new Float32Array(DEFAULT_SIZE * DEFAULT_SIZE));
+  const healthRef = useRef<Float32Array>(new Float32Array(DEFAULT_SIZE * DEFAULT_SIZE));
+  const moistureRef = useRef<Float32Array>(new Float32Array(DEFAULT_SIZE * DEFAULT_SIZE));
+  const nutrientRef = useRef<Float32Array>(new Float32Array(DEFAULT_SIZE * DEFAULT_SIZE));
   const chaosRef = useRef<number[]>(Array(120).fill(0));
   const studyRef = useRef<StudySample[]>([]);
   const rafRef = useRef(0);
@@ -221,6 +226,10 @@ export default function Home() {
       randRef.current = seeded(nextSeed);
       const grid = new Uint8Array(nextSize * nextSize);
       const age = new Uint8Array(nextSize * nextSize);
+      const energy = new Float32Array(nextSize * nextSize);
+      const health = new Float32Array(nextSize * nextSize);
+      const moisture = new Float32Array(nextSize * nextSize);
+      const nutrient = new Float32Array(nextSize * nextSize);
       const random = randRef.current;
       if (nextExperiment === "sand") {
         for (let i = 0; i < grid.length; i++) {
@@ -240,18 +249,43 @@ export default function Home() {
         }
       } else if (nextExperiment === "cyclic") {
         for (let i = 0; i < grid.length; i++) grid[i] = Math.floor(random() * 8);
-      } else {
+      } else if (nextExperiment === "gh") {
         for (let i = 0; i < grid.length; i++) grid[i] = random() < 0.035 ? 1 : random() < 0.08 ? 2 + Math.floor(random() * 7) : 0;
+      } else if (nextExperiment === "plant") {
+        const surface = Math.floor(nextSize * 0.46);
+        for (let y = 0; y < nextSize; y++) for (let x = 0; x < nextSize; x++) {
+          const i = y * nextSize + x;
+          if (y >= surface) grid[i] = random() < 0.72 ? 1 : 0;
+          moisture[i] = y >= surface ? 0.42 + random() * 0.48 : 0;
+          nutrient[i] = y >= surface ? 0.38 + random() * 0.52 : 0;
+          if (y === surface - 1 && random() < 0.085) {
+            grid[i] = 2;
+            age[i] = Math.floor(random() * 18);
+            energy[i] = 0.58 + random() * 0.3;
+            health[i] = 0.82 + random() * 0.18;
+          }
+        }
+      } else {
+        for (let i = 0; i < grid.length; i++) {
+          const cloud = random();
+          grid[i] = cloud < 0.035 ? 2 : cloud < 0.11 ? 1 : 0;
+          if (random() < 0.0018) grid[i] = 4;
+          age[i] = Math.floor(random() * 90);
+        }
       }
       gridRef.current = grid;
       ageRef.current = age;
+      energyRef.current = energy;
+      healthRef.current = health;
+      moistureRef.current = moisture;
+      nutrientRef.current = nutrient;
       chaosRef.current = Array(120).fill(0);
       studyRef.current = [];
       setReport(null);
       metricsRef.current = { events: 0, max: 0, active: 0, critical: 0, entropy: 0 };
       setStats({ events: 0, max: 0, active: 0, critical: 0, entropy: 0 });
       setLog([
-        `世界重置：${nextExperiment === "sand" ? "沙堆临界系统" : nextExperiment === "fire" ? "森林火灾系统" : nextExperiment === "lotka" ? "洛特卡–沃尔泰拉系统" : nextExperiment === "cyclic" ? "循环元胞自动机" : "Greenberg–Hastings 可激发介质"}`,
+        `世界重置：${nextExperiment === "sand" ? "沙堆临界系统" : nextExperiment === "fire" ? "森林火灾系统" : nextExperiment === "lotka" ? "洛特卡–沃尔泰拉系统" : nextExperiment === "cyclic" ? "循环元胞自动机" : nextExperiment === "gh" ? "Greenberg–Hastings 可激发介质" : nextExperiment === "plant" ? "土壤植物生长元胞" : "宇宙物质演化元胞"}`,
         `随机种子 ${nextSeed} · ${preset === "safe" ? "Safe" : "Critical"} Preset`,
       ]);
     },
@@ -551,6 +585,180 @@ export default function Home() {
     if (chaosRef.current.length > 120) chaosRef.current.shift();
   }, [addLog, current, gridSize]);
 
+  const stepPlant = useCallback((f: Features, e: Emotion) => {
+    const grid = gridRef.current;
+    const age = ageRef.current;
+    const energy = energyRef.current;
+    const health = healthRef.current;
+    const moisture = moistureRef.current;
+    const nutrient = nutrientRef.current;
+    const next = grid.slice();
+    const nextAge = age.slice();
+    const nextEnergy = energy.slice();
+    const nextHealth = health.slice();
+    const nextMoisture = moisture.slice();
+    const nextNutrient = nutrient.slice();
+    const size = gridSize;
+    const random = randRef.current;
+    const surface = Math.floor(size * 0.46);
+    const season = 0.5 + 0.5 * Math.sin(current * 0.035);
+    const temperatureFit = 1 - Math.abs(season - 0.66);
+    const sigmoid = (value: number) => 1 / (1 + Math.exp(-value));
+    let changed = 0;
+    let living = 0;
+    let deaths = 0;
+    for (let y = 1; y < size - 1; y++) for (let x = 1; x < size - 1; x++) {
+      const i = y * size + x;
+      const state = grid[i];
+      nextAge[i] = Math.min(255, age[i] + 1);
+      if (state >= 2 && state <= 6) living++;
+      if (y >= surface) {
+        const diffusion = (moisture[i - 1] + moisture[i + 1] + moisture[i - size] + moisture[i + size]) * 0.25;
+        nextMoisture[i] = Math.max(0, Math.min(1, moisture[i] * 0.965 + diffusion * 0.03 + (0.002 + e.valence * 0.002)));
+        nextNutrient[i] = Math.max(0, Math.min(1, nutrient[i] + 0.0005));
+      }
+      let occupied = 0;
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+        if ((ox || oy) && grid[i + oy * size + ox] >= 2) occupied++;
+      }
+      const rho = occupied / 8;
+      const light = y < surface ? Math.max(0.08, 1 - y / surface - rho * 0.45) : 0.05;
+      const resource = y >= surface ? (moisture[i] + nutrient[i]) * 0.5 : light;
+      const healthNow = state >= 2 ? Math.max(0, Math.min(1, (health[i] || 0.82) + resource * 0.028 - rho * 0.008 - 0.003)) : health[i];
+      const photosynthesis = state === 5 || state === 6 ? light * (0.035 + f.mid * 0.045) : 0;
+      const rootUptake = state === 3 ? (moisture[i] + nutrient[i]) * 0.022 : 0;
+      const neighborEnergy = Math.max(energy[i - 1] || 0, energy[i + 1] || 0, energy[i - size] || 0, energy[i + size] || 0);
+      const vascularTransfer = state >= 3 && state <= 6 ? Math.max(0, neighborEnergy - energy[i]) * 0.045 : 0;
+      const maintenance = state === 3 ? 0.0035 : state >= 4 && state <= 6 ? 0.009 : 0.003;
+      nextEnergy[i] = Math.max(-0.2, Math.min(1.5, (energy[i] || 0.52) + photosynthesis + rootUptake + vascularTransfer + resource * 0.01 - maintenance));
+      nextHealth[i] = healthNow;
+      const growthProbability = sigmoid(
+        1.35 * light + 1.1 * moisture[i] + 1.05 * nutrient[i] + 0.72 * temperatureFit -
+        1.5 * rho + 1.15 * healthNow + (random() - 0.5) * (0.4 + f.high * 0.25) - 2.85
+      );
+      const mustDie = state >= 2 && state <= 6 && (nextEnergy[i] < -0.12 || healthNow < 0.08 || (age[i] > 245 && random() < 0.015));
+      if (mustDie) {
+        next[i] = 7; nextAge[i] = 0; nextEnergy[i] = 0; deaths++; changed++;
+        continue;
+      }
+      if (state === 0 && y >= surface && random() < 0.00025 + e.valence * 0.00035) {
+        next[i] = 1; changed++;
+      } else if (state === 1) {
+        if (grid[i - size] === 2 && random() < 0.04 + Math.pow(f.low, 1.5) * 0.18) {
+          next[i] = 3; nextAge[i] = 0; nextEnergy[i] = 0.48; nextHealth[i] = 0.86; changed++;
+        }
+      } else if (state === 2 && age[i] > 5 && nextEnergy[i] > 0.35 && random() < growthProbability) {
+        const rootTarget = i + size + (random() < 0.24 ? (random() < 0.5 ? -1 : 1) : 0);
+        if (grid[rootTarget] <= 1) { next[rootTarget] = 3; nextAge[rootTarget] = 0; nextEnergy[rootTarget] = 0.42; nextHealth[rootTarget] = 0.9; }
+        if (grid[i - size] === 0) { next[i - size] = 4; nextAge[i - size] = 0; nextEnergy[i - size] = 0.52; nextHealth[i - size] = 0.92; }
+        changed += 2;
+      } else if (state === 3 && nextEnergy[i] > 0.2 && random() < growthProbability * (0.38 + f.low * 0.42)) {
+        const candidates = [i + size, i + size - 1, i + size + 1, i - 1, i + 1];
+        const target = candidates[Math.floor(random() * candidates.length)];
+        if (grid[target] <= 1) {
+          next[target] = 3; nextAge[target] = 0; nextEnergy[target] = nextEnergy[i] * 0.62; nextHealth[target] = healthNow;
+          nextEnergy[i] -= 0.16; nextMoisture[target] = Math.max(0, nextMoisture[target] - 0.025); nextNutrient[target] = Math.max(0, nextNutrient[target] - 0.02); changed++;
+        }
+      } else if (state === 4) {
+        if (y > 1 && grid[i - size] === 0 && nextEnergy[i] > 0.28 && random() < growthProbability * (0.55 + f.mid * 0.45)) {
+          next[i - size] = age[i] > 14 && random() < 0.44 ? 5 : 4;
+          nextAge[i - size] = 0; nextEnergy[i - size] = nextEnergy[i] * 0.58; nextHealth[i - size] = healthNow; nextEnergy[i] -= 0.18; changed++;
+        }
+        if (age[i] > 10 && nextEnergy[i] > 0.3 && random() < growthProbability * (0.18 + Math.pow(f.high, 1.5) * 0.42)) {
+          const target = i + (random() < 0.5 ? -1 : 1);
+          if (grid[target] === 0) { next[target] = 5; nextAge[target] = 0; nextEnergy[target] = 0.36; nextHealth[target] = healthNow; changed++; }
+        }
+      } else if (state === 5) {
+        if (age[i] > 20 && season > 0.55 && nextEnergy[i] > 0.55 && random() < growthProbability * (0.08 + f.onset * 0.15)) {
+          next[i] = 6; nextAge[i] = 0; changed++;
+        }
+      } else if (state === 6 && age[i] > 28 && random() < 0.012 + e.valence * 0.018) {
+        const spread = Math.max(2, Math.floor(size * (0.025 + f.high * 0.045)));
+        const tx = Math.max(1, Math.min(size - 2, x + Math.floor((random() - 0.5) * spread * 2)));
+        const target = (surface - 1) * size + tx;
+        if (grid[target] === 0) { next[target] = 2; nextAge[target] = 0; nextEnergy[target] = 0.62; nextHealth[target] = 0.9; changed++; }
+        if (age[i] > 72) { next[i] = 7; nextAge[i] = 0; }
+      } else if (state === 7 && age[i] > 30) {
+        next[i] = y >= surface ? 1 : 0; nextAge[i] = 0;
+        if (y >= surface) nextNutrient[i] = Math.min(1, nextNutrient[i] + 0.18);
+        changed++;
+      }
+    }
+    gridRef.current = next;
+    ageRef.current = nextAge;
+    energyRef.current = nextEnergy;
+    healthRef.current = nextHealth;
+    moistureRef.current = nextMoisture;
+    nutrientRef.current = nextNutrient;
+    const m = metricsRef.current;
+    m.active = living;
+    m.max = Math.max(m.max, living);
+    m.critical = Math.min(1, changed / Math.max(1, size * 0.72));
+    m.entropy = Math.min(1, 0.18 + m.critical * 0.42 + living / next.length * 2.2 + f.onset * 0.12);
+    if (deaths > size * 0.08 && m.events % 8 === 0) addLog(`t+${fmtTime(current)} 根系衰亡 · 组织 ${deaths}`);
+    else if (changed > size * 0.55 && m.events % 10 === 0) addLog(`t+${fmtTime(current)} 生长脉冲 · 状态跃迁 ${changed}`);
+    if (changed) m.events++;
+    chaosRef.current.push(m.entropy);
+    if (chaosRef.current.length > 120) chaosRef.current.shift();
+  }, [addLog, current, gridSize]);
+
+  const stepCosmos = useCallback((f: Features, e: Emotion) => {
+    const grid = gridRef.current;
+    const age = ageRef.current;
+    const next = grid.slice();
+    const nextAge = age.slice();
+    const size = gridSize;
+    const random = randRef.current;
+    const gravity = 2 + Math.floor(Math.pow(f.low * 0.72 + e.arousal * 0.28, 1.55) * 4);
+    let changed = 0;
+    let luminous = 0;
+    for (let y = 1; y < size - 1; y++) for (let x = 1; x < size - 1; x++) {
+      const i = y * size + x;
+      const state = grid[i];
+      let density = 0;
+      let stellar = 0;
+      for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) if (ox || oy) {
+        const v = grid[i + oy * size + ox];
+        if (v > 0) density++;
+        if (v >= 3) stellar++;
+      }
+      nextAge[i] = Math.min(255, age[i] + 1);
+      if (state >= 3 && state <= 6) luminous++;
+      if (state === 0 && density >= gravity && random() < 0.08 + f.rms * 0.24) {
+        next[i] = 1; nextAge[i] = 0; changed++;
+      } else if (state === 1 && density >= Math.max(2, gravity - 1) && random() < 0.045 + Math.pow(f.low, 1.6) * 0.21) {
+        next[i] = 2; nextAge[i] = 0; changed++;
+      } else if (state === 2 && density >= gravity && random() < 0.025 + Math.pow(f.onset, 1.7) * 0.24) {
+        next[i] = 3; nextAge[i] = 0; changed++;
+      } else if (state === 3 && age[i] > 18) {
+        next[i] = 4; nextAge[i] = 0; changed++;
+      } else if (state === 4 && age[i] > 90 - Math.floor(e.arousal * 42)) {
+        next[i] = f.low + f.onset > 0.88 ? 5 : 6; nextAge[i] = 0; changed++;
+      } else if (state === 5) {
+        if (age[i] < 5) for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          const n = i + oy * size + ox;
+          if ((ox || oy) && grid[n] < 3 && random() < 0.5 + f.onset * 0.4) next[n] = 2;
+        }
+        if (age[i] > 12) { next[i] = random() < 0.22 + f.low * 0.28 ? 7 : 6; nextAge[i] = 0; changed++; }
+      } else if (state === 6 && age[i] > 75 && random() < 0.025) {
+        next[i] = 1; nextAge[i] = 0; changed++;
+      } else if (state === 7 && stellar > 0 && random() < 0.04 + f.low * 0.16) {
+        next[i] = 7;
+      }
+    }
+    gridRef.current = next;
+    ageRef.current = nextAge;
+    const m = metricsRef.current;
+    m.active = luminous;
+    m.max = Math.max(m.max, luminous);
+    m.critical = Math.min(1, changed / Math.max(1, size * 0.62));
+    m.entropy = Math.min(1, 0.12 + m.critical * 0.48 + luminous / next.length * 5 + f.rms * 0.14);
+    if (changed > size * 0.45 && m.events % 9 === 0) addLog(`t+${fmtTime(current)} 恒星形成事件 · 物质跃迁 ${changed}`);
+    if (changed) m.events++;
+    chaosRef.current.push(m.entropy);
+    if (chaosRef.current.length > 120) chaosRef.current.shift();
+  }, [addLog, current, gridSize]);
+
   const draw = useCallback(
     (time: number, f: Features, e: Emotion) => {
       const drawInterval = gridSize >= 512 ? 140 : gridSize >= 256 ? 80 : gridSize >= 128 ? 42 : 0;
@@ -584,6 +792,10 @@ export default function Home() {
           ? ["#071516", "#173e6a", "#167f80", "#24a489", "#8fcf73", "#e3b65e", "#e9784e", "#b15173"]
         : experiment === "gh"
           ? ["#071516", "#fff3bd", "#ffb45b", "#ef744b", "#b74c55", "#733d64", "#38466f", "#1d6b76", "#1d443f"]
+        : experiment === "plant"
+          ? ["#07120e", "#49311f", "#b98b55", "#d4b06f", "#4d9b55", "#72d06b", "#ffd36a", "#806145"]
+        : experiment === "cosmos"
+          ? ["#02030a", "#14264b", "#39498d", "#d55da8", "#dceaff", "#ff9a52", "#756f9b", "#05030c"]
         : SPECTRUMS[activeSpectrum];
       if (viewMode === "2d") {
         if (!pixelCanvasRef.current) pixelCanvasRef.current = document.createElement("canvas");
@@ -607,6 +819,47 @@ export default function Home() {
           ctx.imageSmoothingEnabled = false;
           ctx.drawImage(pixels, ox, oy, side, side);
         }
+      } else if (experiment === "cosmos") {
+        const bg = ctx.createRadialGradient(rect.width * 0.48, oy + side * 0.43, 0, rect.width * 0.5, oy + side * 0.5, side * 0.72);
+        bg.addColorStop(0, "#10152e");
+        bg.addColorStop(0.48, "#050817");
+        bg.addColorStop(1, "#010207");
+        ctx.fillStyle = bg;
+        ctx.fillRect(ox, oy, side, side);
+        const stride = Math.max(1, Math.ceil(size / 76));
+        for (let y = 0; y < size; y += stride) for (let x = 0; x < size; x += stride) {
+          const value = grid[y * size + x];
+          if (!value) continue;
+          const hash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
+          const depth = ((hash % 997) / 997) * 0.72 + 0.28;
+          const drift = Math.sin(time * 0.00008 + hash) * f.low * 5;
+          const px = ox + side * 0.5 + (x / size - 0.5) * side * depth + drift;
+          const py = oy + side * 0.5 + (y / size - 0.5) * side * depth + Math.cos(time * 0.00006 + hash) * f.mid * 3;
+          const radius = value <= 2 ? 0.7 + value * 0.8 : value === 5 ? 8 + f.onset * 12 : value === 7 ? 7 : 2.6 + depth * 3.8;
+          if (value === 1 || value === 2) {
+            const cloud = ctx.createRadialGradient(px, py, 0, px, py, radius * 5);
+            cloud.addColorStop(0, value === 2 ? "rgba(201,91,190,.38)" : "rgba(68,113,191,.3)");
+            cloud.addColorStop(1, "rgba(15,20,55,0)");
+            ctx.fillStyle = cloud;
+            ctx.beginPath(); ctx.arc(px, py, radius * 5, 0, Math.PI * 2); ctx.fill();
+          } else if (value === 7) {
+            ctx.strokeStyle = "rgba(255,166,77,.82)";
+            ctx.lineWidth = 1.5 + f.low * 3;
+            ctx.beginPath(); ctx.ellipse(px, py, radius * 1.65, radius * 0.48, -0.38, 0, Math.PI * 2); ctx.stroke();
+            ctx.fillStyle = "#000";
+            ctx.beginPath(); ctx.arc(px, py, radius * 0.72, 0, Math.PI * 2); ctx.fill();
+          } else {
+            const glow = ctx.createRadialGradient(px, py, 0, px, py, radius * 3.2);
+            const color = value === 5 ? "#ff8350" : value === 6 ? "#8279a7" : value === 3 ? "#f09ac8" : "#eaf4ff";
+            glow.addColorStop(0, "#fff");
+            glow.addColorStop(0.18, color);
+            glow.addColorStop(1, "rgba(40,70,150,0)");
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(px, py, radius * 3.2, 0, Math.PI * 2); ctx.fill();
+          }
+        }
+        ctx.strokeStyle = "rgba(129,169,255,.2)";
+        ctx.strokeRect(ox + 1, oy + 1, side - 2, side - 2);
       } else {
         const stride = Math.max(1, Math.ceil(size / 48));
         const count = Math.ceil(size / stride);
@@ -626,7 +879,44 @@ export default function Home() {
             const groundY = baseY + (x + y) * unit * 0.47;
             ctx.globalAlpha = 0.88;
             ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
-            if (experiment === "sand") {
+            if (experiment === "plant") {
+              const soil = gy >= size * 0.46;
+              ctx.fillStyle = soil ? (cellValue === 1 ? "#65452b" : "#30231b") : "rgba(8,28,21,.18)";
+              ctx.beginPath();
+              ctx.moveTo(px, groundY - unit * 0.3); ctx.lineTo(px + unit, groundY);
+              ctx.lineTo(px, groundY + unit * 0.3); ctx.lineTo(px - unit, groundY); ctx.closePath(); ctx.fill();
+              if (soil) {
+                ctx.fillStyle = "rgba(25,12,7,.42)";
+                ctx.beginPath(); ctx.moveTo(px - unit, groundY); ctx.lineTo(px, groundY + unit * 0.3);
+                ctx.lineTo(px, groundY + unit * 0.72); ctx.lineTo(px - unit, groundY + unit * 0.42); ctx.closePath(); ctx.fill();
+                ctx.fillStyle = "rgba(103,67,38,.45)";
+                ctx.beginPath(); ctx.moveTo(px + unit, groundY); ctx.lineTo(px, groundY + unit * 0.3);
+                ctx.lineTo(px, groundY + unit * 0.72); ctx.lineTo(px + unit, groundY + unit * 0.42); ctx.closePath(); ctx.fill();
+              }
+              if (cellValue === 3) {
+                const rootHealth = healthRef.current[gy * size + gx] || 0.5;
+                ctx.strokeStyle = rootHealth < 0.25 ? "#695546" : "#c39a67"; ctx.lineWidth = Math.max(1.2, unit * 0.28);
+                ctx.lineCap = "round";
+                ctx.beginPath(); ctx.moveTo(px, groundY - unit * 0.1); ctx.lineTo(px, groundY + unit * 1.25); ctx.stroke();
+              } else if (cellValue >= 4 && cellValue <= 6) {
+                const height = unit * (1.6 + ((gx + gy) % 4) * 0.25);
+                ctx.fillStyle = "#367d49";
+                ctx.fillRect(px - unit * 0.16, groundY - height, unit * 0.32, height);
+                ctx.fillStyle = cellValue === 6 ? "#edbd4a" : "#57ad5e";
+                ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = cellValue === 6 ? 8 : 2;
+                const cube = unit * (cellValue === 6 ? 0.66 : 0.48);
+                ctx.fillRect(px - cube * 1.05, groundY - height * 0.68, cube, cube * 0.56);
+                ctx.fillRect(px + cube * 0.05, groundY - height * 0.82, cube, cube * 0.56);
+                if (cellValue === 6) ctx.fillRect(px - cube * 0.38, groundY - height - cube * 0.35, cube * 0.76, cube * 0.76);
+                ctx.shadowBlur = 0;
+              } else if (cellValue === 2) {
+                ctx.fillStyle = "#d7aa5c";
+                ctx.fillRect(px - unit * 0.28, groundY - unit * 0.42, unit * 0.56, unit * 0.56);
+              } else if (cellValue === 7) {
+                ctx.fillStyle = "#675748";
+                ctx.fillRect(px - unit * 0.22, groundY - unit * 0.52, unit * 0.44, unit * 0.52);
+              }
+            } else if (experiment === "sand") {
               const height = (0.35 + Math.min(5, cellValue) * 0.72) * unit;
               ctx.beginPath();
               ctx.moveTo(px, groundY - height - unit * 0.42);
@@ -690,6 +980,15 @@ export default function Home() {
           }
         }
         ctx.globalAlpha = 1;
+        if (experiment === "plant") {
+          const ax = ox + 25;
+          const ay = oy + side - 28;
+          ctx.lineWidth = 1.5;
+          ctx.font = "9px monospace";
+          ctx.strokeStyle = "#d26355"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 42, ay); ctx.stroke(); ctx.fillStyle = "#d26355"; ctx.fillText("X", ax + 47, ay + 3);
+          ctx.strokeStyle = "#64b879"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + 22, ay - 24); ctx.stroke(); ctx.fillStyle = "#64b879"; ctx.fillText("Y", ax + 25, ay - 27);
+          ctx.strokeStyle = "#6fa4d8"; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay - 48); ctx.stroke(); ctx.fillStyle = "#6fa4d8"; ctx.fillText("Z", ax - 3, ay - 54);
+        }
       }
       const pulse = 1 + f.onset * 7 + Math.sin(time / 130) * f.low * 2;
       ctx.strokeStyle = palette[palette.length - 1];
@@ -770,41 +1069,53 @@ export default function Home() {
     }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
-    const cx = rect.width / 2;
-    const cy = rect.height / 2;
-    const r = Math.min(rect.width, rect.height) * 0.35;
-    const angles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
-    ctx.strokeStyle = "rgba(127,210,172,.22)";
+    const pad = 22;
+    const width = rect.width - pad * 2;
+    const height = rect.height - pad * 2;
+    ctx.fillStyle = "#fbfcfa";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.strokeStyle = "rgba(39,66,93,.1)";
     ctx.lineWidth = 1;
-    for (const scale of [0.33, 0.66, 1]) {
-      ctx.beginPath();
-      angles.forEach((angle, i) => {
-        const x = cx + Math.cos(angle) * r * scale;
-        const y = cy + Math.sin(angle) * r * scale;
-        if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      });
-      ctx.closePath();
-      ctx.stroke();
+    for (let i = 0; i <= 8; i++) {
+      const x = pad + width * i / 8;
+      const y = pad + height * i / 8;
+      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, rect.height - pad); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(rect.width - pad, y); ctx.stroke();
     }
-    angles.forEach((angle) => {
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r);
-      ctx.stroke();
-    });
-    const values = [e.arousal, e.valence, e.tension, e.stability];
-    ctx.beginPath();
-    angles.forEach((angle, i) => {
-      const x = cx + Math.cos(angle) * r * values[i];
-      const y = cy + Math.sin(angle) * r * values[i];
-      if (!i) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-    });
-    ctx.closePath();
-    ctx.fillStyle = "rgba(240,189,89,.22)";
-    ctx.strokeStyle = "#f0bd59";
-    ctx.lineWidth = 2;
-    ctx.fill();
-    ctx.stroke();
+    ctx.strokeStyle = "rgba(20,48,82,.45)";
+    ctx.beginPath(); ctx.moveTo(rect.width / 2, pad); ctx.lineTo(rect.width / 2, rect.height - pad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad, rect.height / 2); ctx.lineTo(rect.width - pad, rect.height / 2); ctx.stroke();
+    const entropy = metricsRef.current.entropy;
+    const point = {
+      x: pad + width * Math.max(0, Math.min(1, 0.5 + (e.valence - e.tension) * 0.46)),
+      y: pad + height * Math.max(0, Math.min(1, 0.5 + (e.arousal - e.stability) * 0.46)),
+      entropy,
+    };
+    const trail = radarTrailRef.current;
+    const last = trail[trail.length - 1];
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) > 0.35) {
+      trail.push(point);
+      if (trail.length > 160) trail.shift();
+    }
+    if (trail.length > 1) {
+      for (let i = 1; i < trail.length; i++) {
+        const a = trail[i - 1];
+        const b = trail[i];
+        const hue = 205 - b.entropy * 190;
+        ctx.strokeStyle = `hsla(${hue},72%,42%,${0.16 + i / trail.length * 0.74})`;
+        ctx.lineWidth = 0.7 + b.entropy * 2.8;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+    }
+    const hue = 205 - entropy * 190;
+    ctx.shadowColor = `hsl(${hue},75%,45%)`;
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = `hsl(${hue},75%,43%)`;
+    ctx.beginPath(); ctx.arc(point.x, point.y, 3.2 + entropy * 3.8, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#41556b";
+    ctx.font = "7px monospace";
+    ctx.fillText(`ENTROPY ${entropy.toFixed(2)}`, pad + 3, rect.height - 7);
   }, []);
 
   useEffect(() => {
@@ -878,6 +1189,8 @@ export default function Home() {
         if (experiment === "sand") stepSand(f, e, time);
         else if (experiment === "fire") stepFire(f, e);
         else if (experiment === "lotka") stepLotka(f, e, time);
+        else if (experiment === "plant") stepPlant(f, e);
+        else if (experiment === "cosmos") stepCosmos(f, e);
         else stepAutomata(experiment, f, e);
         if (hasActiveAudio) {
           studyRef.current.push({
@@ -907,7 +1220,7 @@ export default function Home() {
     };
     rafRef.current = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [draw, drawChaos, drawRadar, experiment, gridSize, randomSpectrum, running, spectrum, stepAutomata, stepFire, stepLotka, stepSand]); // features intentionally sampled
+  }, [draw, drawChaos, drawRadar, experiment, gridSize, randomSpectrum, running, spectrum, stepAutomata, stepCosmos, stepFire, stepLotka, stepPlant, stepSand]); // features intentionally sampled
 
   const generateReport = useCallback(() => {
     const samples = studyRef.current;
@@ -1167,8 +1480,12 @@ export default function Home() {
           ? [["Prey growth α", (0.42 + emotion.valence * 0.55).toFixed(2), "Valence"], ["Predation β", (0.55 + emotion.tension * 0.65).toFixed(2), "Tension"], ["Conversion δ", (0.35 + features.low * 0.45).toFixed(2), "Low band"], ["Mortality γ", (0.45 + emotion.stability * 0.35).toFixed(2), "Stability"]]
           : experiment === "cyclic"
             ? [["States", "8", "Phase count"], ["Capture threshold", `${Math.max(1, 3 - Math.floor(Math.pow(features.onset * 0.7 + features.low * 0.3, 1.4) * 2))}`, "Beat sensitivity"], ["Neighborhood", "Moore-8", "Local coupling"], ["Phase velocity", fastValue(features.rms), "RMS exponent"]]
-            : [["Resting", "0", "Quiescent state"], ["Excited", "1", "Wave front"], ["Refractory", "2–8", "Recovery cycle"], ["Excite threshold", `${Math.max(1, 3 - Math.floor(Math.pow(features.onset, 1.5) * 2))}`, "Onset exponent"]];
-  const mappingGroups = [
+            : experiment === "gh"
+              ? [["Resting", "0", "Quiescent state"], ["Excited", "1", "Wave front"], ["Refractory", "2–8", "Recovery cycle"], ["Excite threshold", `${Math.max(1, 3 - Math.floor(Math.pow(features.onset, 1.5) * 2))}`, "Onset exponent"]]
+              : experiment === "plant"
+                ? [["Soil fertility", `${Math.round((0.38 + emotion.valence * 0.56) * 100)}%`, "Valence"], ["Root pressure", fastValue(features.low), "Low frequency"], ["Photosynthesis", fastValue(features.mid), "Mid-band energy"], ["Branching", fastValue(features.high * 0.55 + features.onset * 0.45), "High + onset"]]
+                : [["Gravity density", `${2 + Math.floor(Math.pow(features.low * 0.72 + emotion.arousal * 0.28, 1.55) * 4)}`, "Low-band gravity"], ["Star birth", fastValue(features.onset), "Onset collapse"], ["Radiation", fastValue(features.centroid), "Spectral centroid"], ["Expansion", `${(0.45 + emotion.stability * 0.72).toFixed(2)}`, "Slow stability"]];
+  const defaultMappingGroups = [
     {
       title: "FAST LAYER",
       items: [
@@ -1196,19 +1513,49 @@ export default function Home() {
       items: worldItems,
     },
   ];
+  const mappingGroups = experiment === "cosmos" ? [
+    {
+      title: "COSMIC FORCING",
+      items: [
+        ["引力扰动", fastValue(features.low), "Low band · collapse field"],
+        ["辐射通量", fastValue(features.high), "High band · photon flux"],
+        ["物质密度波", fastValue(features.mid), "Mid band · gas density"],
+        ["恒星形成率", fastValue(features.onset), "Onset · ignition probability"],
+        ["背景能量", fastValue(features.rms), "RMS · vacuum energy"],
+        ["恒星温度色", fastValue(features.centroid), "Centroid · radiation color"],
+      ],
+    },
+    {
+      title: "COSMOLOGICAL STATE",
+      items: [
+        ["膨胀速率 H", (0.45 + emotion.stability * 0.72).toFixed(2), "Stability · expansion"],
+        ["暗能量 ΩΛ", (0.52 + emotion.valence * 0.34).toFixed(2), "Valence · repulsion"],
+        ["物质参数 Ωm", (0.18 + emotion.tension * 0.46).toFixed(2), "Tension · matter fraction"],
+        ["涨落振幅 σ8", (0.42 + emotion.arousal * 0.58).toFixed(2), "Arousal · clustering"],
+        ["引力时间尺度", `${Math.round(18 + (1 - emotion.arousal) * 72)} τ`, "Slow energy envelope"],
+        ["热平衡", `${Math.round(emotion.stability * 100)}%`, "Slow coherence"],
+      ],
+    },
+    {
+      title: "UNIVERSE PARAMETERS",
+      items: worldItems,
+    },
+  ] : defaultMappingGroups;
   const displaySpectrum = spectrum === "random" ? randomSpectrum : spectrum;
   const bpmPalette = displaySpectrum === "earth" && experiment === "fire"
     ? ["#10251b", "#347653", "#ff7a36", "#382c2b", "#ffd37a"]
     : displaySpectrum === "earth" && experiment === "lotka"
       ? ["#071516", "#75d6bd", "#ff714b", "#e3b65e", "#ffffff"]
     : SPECTRUMS[displaySpectrum];
-  const telemetryColor = experiment === "fire" ? "#ff8a3d" : experiment === "sand" ? "#f2c765" : experiment === "lotka" ? "#79d9be" : experiment === "cyclic" ? "#73d8c1" : "#ffd06b";
+  const telemetryColor = experiment === "fire" ? "#ff8a3d" : experiment === "sand" ? "#f2c765" : experiment === "lotka" ? "#79d9be" : experiment === "cyclic" ? "#73d8c1" : experiment === "plant" ? "#74d979" : experiment === "cosmos" ? "#9eafff" : "#ffd06b";
   const experimentMeta: Record<Experiment, { code: string; title: string; stat: string; active: string }> = {
     sand: { code: "SANDPILE", title: "临界正在累积", stat: "临界单元", active: "最近雪崩" },
     fire: { code: "FOREST_FIRE", title: "火线正在寻找路径", stat: "传播风险", active: "活跃火点" },
     lotka: { code: "LOTKA_VOLTERRA", title: "种群正在追逐平衡", stat: "动态压力", active: "种群变化量" },
     cyclic: { code: "CYCLIC_CA", title: "相位正在循环捕获", stat: "相位压力", active: "状态跃迁" },
     gh: { code: "GREENBERG_HASTINGS", title: "激发波正在穿越介质", stat: "激发临界", active: "活跃波前" },
+    plant: { code: "SOIL_BOTANY_CA", title: "根系正在重写土壤", stat: "生态复杂度", active: "活体元胞" },
+    cosmos: { code: "COSMIC_LATTICE_CA", title: "物质正在坍缩成星", stat: "引力临界", active: "发光天体" },
   };
 
   return (
@@ -1323,6 +1670,14 @@ export default function Home() {
             <button className={experiment === "gh" ? "active" : ""} onClick={() => switchExperiment("gh")}>
               <span className="scene-glyph gh">⌁</span>
               <span className="scene-copy"><strong>可激发介质</strong><small>Greenberg–Hastings</small></span>
+            </button>
+            <button className={experiment === "plant" ? "active" : ""} onClick={() => switchExperiment("plant")}>
+              <span className="scene-glyph plant">✦</span>
+              <span className="scene-copy"><strong>土壤植物生长</strong><small>Botanical CA</small></span>
+            </button>
+            <button className={experiment === "cosmos" ? "active" : ""} onClick={() => switchExperiment("cosmos")}>
+              <span className="scene-glyph cosmos">◎</span>
+              <span className="scene-copy"><strong>宇宙物质演化</strong><small>Cosmic Lattice CA</small></span>
             </button>
           </div>
           <div className="view-slider">
@@ -1475,7 +1830,7 @@ export default function Home() {
             <canvas
               ref={canvasRef}
               className="world-canvas"
-              aria-label={experiment === "sand" ? "沙堆临界系统网格" : experiment === "fire" ? "森林火灾系统网格" : "洛特卡沃尔泰拉种群网格"}
+              aria-label={experiment === "sand" ? "沙堆临界系统网格" : experiment === "fire" ? "森林火灾系统网格" : experiment === "plant" ? "植物在土壤中生长的元胞网格" : experiment === "cosmos" ? "宇宙物质演化的三维元胞空间" : "复杂系统元胞网格"}
             />
             <button className="center-view" onClick={() => {
               lastGridDrawRef.current = 0;
@@ -1523,12 +1878,26 @@ export default function Home() {
                   <span><i style={{ background: "#e3b65e" }} />Phase 5</span>
                   <span><i style={{ background: "#b15173" }} />Phase 7</span>
                 </>
-              ) : (
+              ) : experiment === "gh" ? (
                 <>
                   <span><i style={{ background: "#071516" }} />Resting</span>
                   <span><i style={{ background: "#fff3bd" }} />Excited</span>
                   <span><i style={{ background: "#ef744b" }} />Early refractory</span>
                   <span><i style={{ background: "#1d443f" }} />Recovery</span>
+                </>
+              ) : experiment === "plant" ? (
+                <>
+                  <span><i style={{ background: "#49311f" }} />肥沃土壤</span>
+                  <span><i style={{ background: "#b98b55" }} />种子 / 根系</span>
+                  <span><i style={{ background: "#72d06b" }} />茎叶</span>
+                  <span><i style={{ background: "#ffd36a" }} />花期</span>
+                </>
+              ) : (
+                <>
+                  <span><i style={{ background: "#14264b" }} />暗物质云</span>
+                  <span><i style={{ background: "#d55da8" }} />原恒星</span>
+                  <span><i style={{ background: "#dceaff" }} />恒星</span>
+                  <span><i style={{ background: "#ff9a52" }} />超新星 / 黑洞</span>
                 </>
               )}
             </div>
@@ -1629,8 +1998,8 @@ export default function Home() {
 
         <aside className={`right-panel ${!showRight ? "panel-hidden" : ""}`}>
           <div className="panel-heading">
-            <span>音乐特征</span>
-            <em>FAST · 20–250ms</em>
+            <span>{experiment === "cosmos" ? "宇宙驱动遥测" : "音乐特征"}</span>
+            <em>{experiment === "cosmos" ? "COSMIC INPUT" : "FAST · 20–250ms"}</em>
           </div>
           <div className="tempo-card">
             <div>
@@ -1652,16 +2021,15 @@ export default function Home() {
           </div>
 
           <div className="panel-heading emotion-head">
-            <span>连续情绪</span>
-            <em>SLOW · 2–8s</em>
+            <span>{experiment === "cosmos" ? "宇宙状态轨迹" : "熵四象轨迹"}</span>
+            <em>{experiment === "cosmos" ? "COSMOLOGY · 2–8s" : "PHASE DESCENT · LIVE"}</em>
           </div>
           <div className="radar-instrument">
-            <canvas ref={radarCanvasRef} aria-label="音乐情绪四维雷达驾驶仪" />
-            <span className="radar-label top">激活</span>
-            <span className="radar-label right">正向</span>
-            <span className="radar-label bottom">紧张</span>
-            <span className="radar-label left">稳定</span>
-            <i className="radar-crosshair" />
+            <canvas ref={radarCanvasRef} aria-label="熵在激活、正向、紧张和稳定四象空间中的历史轨迹" />
+            <span className="radar-label top">稳定 / STABLE</span>
+            <span className="radar-label right">正向 / VALENCE</span>
+            <span className="radar-label bottom">激活 / AROUSAL</span>
+            <span className="radar-label left">紧张 / TENSION</span>
           </div>
           <div className="emotion-grid">
             {[
@@ -1679,7 +2047,7 @@ export default function Home() {
           </div>
 
           <div className="panel-heading world-head">
-            <span>世界参数</span>
+            <span>{experiment === "cosmos" ? "宇宙参数" : "世界参数"}</span>
             <em>{mode.toUpperCase()} MAPPING</em>
           </div>
           <div className="mapping-list">
@@ -1707,7 +2075,7 @@ export default function Home() {
           </div>
           <div className="summary">
             <div><span>事件总数</span><strong>{stats.events}</strong></div>
-            <div><span>{experiment === "sand" ? "最大雪崩" : "最大火势"}</span><strong>{stats.max}</strong></div>
+            <div><span>{experiment === "sand" ? "最大雪崩" : experiment === "fire" ? "最大火势" : experiment === "plant" ? "最大生物量" : experiment === "cosmos" ? "峰值发光体" : "峰值事件"}</span><strong>{stats.max}</strong></div>
           </div>
         </aside>
       </section>
