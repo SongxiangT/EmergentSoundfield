@@ -189,7 +189,7 @@ export default function Home() {
   const slowRef = useRef(DEFAULT_EMOTION);
   const metricsRef = useRef({ events: 0, max: 0, active: 0, critical: 0, entropy: 0 });
 
-  const [experiment, setExperiment] = useState<Experiment>("sand");
+  const [experiment, setExperiment] = useState<Experiment>("fire");
   const [mode, setMode] = useState<DriveMode>("auto");
   const [preset, setPreset] = useState<"safe" | "critical">("safe");
   const [seed, setSeed] = useState(2607);
@@ -305,6 +305,7 @@ export default function Home() {
   const switchExperiment = (next: Experiment) => {
     if (next === experiment) return;
     setExperiment(next);
+    if (next === "plant" && (cameraMode === "default" || cameraMode === "orbit")) setCameraMode("top");
     resetWorld(next, seed, gridSize);
   };
 
@@ -1062,11 +1063,11 @@ export default function Home() {
                 ctx.fillRect(px - unit * 0.18, groundY - unit * 0.7, unit * 0.36, unit * 0.7);
               }
             } else if (cellValue > 0) {
-              const radius = unit * (cellValue === 1 ? 0.4 : 0.62);
-              const lift = cellValue === 1 ? unit * 0.45 : unit * 1.05;
-              ctx.fillStyle = cellValue === 1 ? palette[2] : palette[palette.length - 1];
+              const radius = unit * (0.34 + Math.min(cellValue, 8) * 0.045);
+              const lift = unit * (0.38 + Math.min(cellValue, 8) * 0.12);
+              ctx.fillStyle = palette[Math.min(cellValue, palette.length - 1)];
               ctx.shadowColor = ctx.fillStyle;
-              ctx.shadowBlur = cellValue === 2 ? 7 : 3;
+              ctx.shadowBlur = experiment === "cyclic" ? 5 + cellValue * 0.8 : cellValue === 2 ? 7 : 3;
               ctx.beginPath();
               ctx.arc(px, groundY - lift, radius, 0, Math.PI * 2);
               ctx.fill();
@@ -1648,13 +1649,13 @@ export default function Home() {
     : SPECTRUMS[displaySpectrum];
   const telemetryColor = experiment === "fire" ? "#ff8a3d" : experiment === "sand" ? "#f2c765" : experiment === "lotka" ? "#79d9be" : experiment === "cyclic" ? "#73d8c1" : experiment === "plant" ? "#74d979" : experiment === "cosmos" ? "#9eafff" : "#ffd06b";
   const experimentMeta: Record<Experiment, { code: string; title: string; stat: string; active: string }> = {
-    sand: { code: "SANDPILE", title: "临界正在累积", stat: "临界单元", active: "最近雪崩" },
-    fire: { code: "FOREST_FIRE", title: "火线正在寻找路径", stat: "传播风险", active: "活跃火点" },
-    lotka: { code: "LOTKA_VOLTERRA", title: "种群正在追逐平衡", stat: "动态压力", active: "种群变化量" },
-    cyclic: { code: "CYCLIC_CA", title: "相位正在循环捕获", stat: "相位压力", active: "状态跃迁" },
-    gh: { code: "GREENBERG_HASTINGS", title: "激发波正在穿越介质", stat: "激发临界", active: "活跃波前" },
-    plant: { code: "SOIL_BOTANY_CA", title: "根系正在重写土壤", stat: "生态复杂度", active: "活体元胞" },
-    cosmos: { code: "COSMIC_LATTICE_CA", title: "物质正在坍缩成星", stat: "引力临界", active: "发光天体" },
+    sand: { code: "SANDPILE", title: "沙堆雪崩实验", stat: "临界区域", active: "本次雪崩规模" },
+    fire: { code: "FOREST_FIRE", title: "森林火灾传播实验", stat: "火灾风险", active: "正在燃烧的区域" },
+    lotka: { code: "LOTKA_VOLTERRA", title: "捕食者与猎物实验", stat: "种群波动", active: "种群变化数量" },
+    cyclic: { code: "CYCLIC_CA", title: "八色循环元胞实验", stat: "循环活跃度", active: "发生变化的元胞" },
+    gh: { code: "GREENBERG_HASTINGS", title: "神经脉冲传播实验", stat: "脉冲传播强度", active: "活跃脉冲数量" },
+    plant: { code: "SOIL_BOTANY_CA", title: "植物生长实验", stat: "生态活跃度", active: "植物组织数量" },
+    cosmos: { code: "COSMIC_LATTICE_CA", title: "宇宙恒星演化实验", stat: "物质聚集程度", active: "发光天体数量" },
   };
 
   return (
@@ -1794,14 +1795,11 @@ export default function Home() {
           {viewMode === "3d" && (
             <div className="camera-console" aria-label="三维镜头控制">
               <div><span>CAMERA</span><em>{cameraMode === "auto" ? "AUTO CRUISE · 7s" : cameraMode.toUpperCase()}</em></div>
-              <div className="camera-options">
-                {([
-                  ["default", "初始"],
-                  ["top", "俯视"],
-                  ["side", "侧视"],
-                  ["orbit", "轨道"],
-                  ["auto", "自动"],
-                ] as const).map(([modeName, label]) => (
+              <div className="camera-options" style={{ gridTemplateColumns: `repeat(${experiment === "plant" ? 3 : 5},1fr)` }}>
+                {(experiment === "plant"
+                  ? ([["top", "俯视"], ["side", "侧视"], ["auto", "自动"]] as const)
+                  : ([["default", "初始"], ["top", "俯视"], ["side", "侧视"], ["orbit", "轨道"], ["auto", "自动"]] as const)
+                ).map(([modeName, label]) => (
                   <button key={modeName} className={cameraMode === modeName ? "active" : ""} onClick={() => setCameraMode(modeName)}>
                     {label}
                   </button>
