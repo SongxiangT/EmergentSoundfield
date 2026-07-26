@@ -204,7 +204,7 @@ export default function Home() {
   const [showLeft, setShowLeft] = useState(true);
   const [showRight, setShowRight] = useState(true);
   const [running, setRunning] = useState(false);
-  const [fileName, setFileName] = useState("国风-2 · 原创内置曲");
+  const [fileName, setFileName] = useState("Alexguz · Funk & Breakbeat");
   const [duration, setDuration] = useState(0);
   const [audioUrl, setAudioUrl] = useState("");
   const [showUrlInput, setShowUrlInput] = useState(false);
@@ -1165,53 +1165,48 @@ export default function Home() {
     }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, rect.width, rect.height);
-    const pad = 22;
-    const width = rect.width - pad * 2;
-    const height = rect.height - pad * 2;
-    ctx.fillStyle = "#fbfcfa";
-    ctx.fillRect(0, 0, rect.width, rect.height);
-    ctx.strokeStyle = "rgba(39,66,93,.1)";
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    const radius = Math.min(rect.width, rect.height) * 0.34;
+    const angles = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+    ctx.strokeStyle = "rgba(69,104,119,.2)";
     ctx.lineWidth = 1;
-    for (let i = 0; i <= 8; i++) {
-      const x = pad + width * i / 8;
-      const y = pad + height * i / 8;
-      ctx.beginPath(); ctx.moveTo(x, pad); ctx.lineTo(x, rect.height - pad); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(rect.width - pad, y); ctx.stroke();
+    for (const scale of [0.25, 0.5, 0.75, 1]) {
+      ctx.beginPath();
+      angles.forEach((angle, index) => {
+        const x = cx + Math.cos(angle) * radius * scale;
+        const y = cy + Math.sin(angle) * radius * scale;
+        if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      ctx.stroke();
     }
-    ctx.strokeStyle = "rgba(20,48,82,.45)";
-    ctx.beginPath(); ctx.moveTo(rect.width / 2, pad); ctx.lineTo(rect.width / 2, rect.height - pad); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(pad, rect.height / 2); ctx.lineTo(rect.width - pad, rect.height / 2); ctx.stroke();
+    angles.forEach((angle) => {
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      ctx.stroke();
+    });
     const entropy = metricsRef.current.entropy;
-    const point = {
-      x: pad + width * Math.max(0, Math.min(1, 0.5 + (e.valence - e.tension) * 0.46)),
-      y: pad + height * Math.max(0, Math.min(1, 0.5 + (e.arousal - e.stability) * 0.46)),
-      entropy,
-    };
-    const trail = radarTrailRef.current;
-    const last = trail[trail.length - 1];
-    if (!last || Math.hypot(point.x - last.x, point.y - last.y) > 0.35) {
-      trail.push(point);
-      if (trail.length > 160) trail.shift();
-    }
-    if (trail.length > 1) {
-      for (let i = 1; i < trail.length; i++) {
-        const a = trail[i - 1];
-        const b = trail[i];
-        const hue = 205 - b.entropy * 190;
-        ctx.strokeStyle = `hsla(${hue},72%,42%,${0.16 + i / trail.length * 0.74})`;
-        ctx.lineWidth = 0.7 + b.entropy * 2.8;
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      }
-    }
+    const values = [e.arousal, e.valence, e.tension, e.stability];
     const hue = 205 - entropy * 190;
-    ctx.shadowColor = `hsl(${hue},75%,45%)`;
-    ctx.shadowBlur = 10;
-    ctx.fillStyle = `hsl(${hue},75%,43%)`;
-    ctx.beginPath(); ctx.arc(point.x, point.y, 3.2 + entropy * 3.8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    angles.forEach((angle, index) => {
+      const x = cx + Math.cos(angle) * radius * values[index];
+      const y = cy + Math.sin(angle) * radius * values[index];
+      if (!index) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = `hsla(${hue},72%,48%,.2)`;
+    ctx.strokeStyle = `hsl(${hue},72%,43%)`;
+    ctx.lineWidth = 2.2;
+    ctx.shadowColor = `hsla(${hue},72%,43%,.35)`;
+    ctx.shadowBlur = 8;
+    ctx.fill(); ctx.stroke();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = "#41556b";
+    ctx.fillStyle = "#40586a";
     ctx.font = "7px monospace";
-    ctx.fillText(`ENTROPY ${entropy.toFixed(2)}`, pad + 3, rect.height - 7);
+    ctx.textAlign = "center";
+    ctx.fillText(`ENTROPY ${entropy.toFixed(2)}`, cx, cy + 3);
   }, []);
 
   useEffect(() => {
@@ -1662,7 +1657,7 @@ export default function Home() {
     <main className="shell">
       <audio
         ref={audioRef}
-        src="/guofeng-2-web.wav"
+        src="/alexguz-funk-breakbeat.mp3"
         preload="metadata"
         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
         onTimeUpdate={(e) => setCurrent(e.currentTarget.currentTime)}
@@ -2136,15 +2131,15 @@ export default function Home() {
           </div>
 
           <div className="panel-heading emotion-head">
-            <span>{experiment === "cosmos" ? "宇宙状态轨迹" : "熵四象轨迹"}</span>
-            <em>{experiment === "cosmos" ? "COSMOLOGY · 2–8s" : "PHASE DESCENT · LIVE"}</em>
+            <span>{experiment === "cosmos" ? "宇宙状态雷达" : "四维情绪雷达"}</span>
+            <em>{experiment === "cosmos" ? "COSMOLOGY · 2–8s" : "EMOTION RADAR · LIVE"}</em>
           </div>
           <div className="radar-instrument">
-            <canvas ref={radarCanvasRef} aria-label="熵在激活、正向、紧张和稳定四象空间中的历史轨迹" />
-            <span className="radar-label top">稳定 / STABLE</span>
+            <canvas ref={radarCanvasRef} aria-label="激活、正向、紧张和稳定四维情绪雷达图" />
+            <span className="radar-label top">激活 / AROUSAL</span>
             <span className="radar-label right">正向 / VALENCE</span>
-            <span className="radar-label bottom">激活 / AROUSAL</span>
-            <span className="radar-label left">紧张 / TENSION</span>
+            <span className="radar-label bottom">紧张 / TENSION</span>
+            <span className="radar-label left">稳定 / STABLE</span>
           </div>
           <div className="emotion-grid">
             {[
